@@ -31,7 +31,7 @@ import hla.rti1516_2025.encoding.EncoderFactory;
 import hla.rti1516_2025.encoding.HLAinteger16LE;
 import org.see.skf.core.Coder;
 import org.see.skf.core.HLAUtilityFactory;
-import org.see.skf.util.models.ModeTransitionRequest;
+import org.see.skf.core.ModeTransitionRequest;
 
 /**
  * Coder for the SpaceFOM MTRMode enum data type.

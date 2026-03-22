@@ -1,7 +1,7 @@
 package org.see.skf.runtime;
 
 import org.junit.jupiter.api.Test;
-import org.see.skf.util.models.ExecutionConfiguration;
+import org.see.skf.core.ExecutionConfiguration;
 import org.see.skf.runtime.objects.ObjectClassModelParser;
 
 import java.lang.reflect.Field;

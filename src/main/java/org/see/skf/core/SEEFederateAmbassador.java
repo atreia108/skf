@@ -31,7 +31,6 @@ import hla.rti1516_2025.SynchronizationPointFailureReason;
 import hla.rti1516_2025.exceptions.FederateInternalError;
 import hla.rti1516_2025.time.HLAinteger64Time;
 import hla.rti1516_2025.time.LogicalTime;
-import org.see.skf.time.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,42 +44,62 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SEEFederateAmbassador extends SKFederateAmbassador {
     private static final Logger logger = LoggerFactory.getLogger(SEEFederateAmbassador.class);
 
-    private final Time simulationTime;
-
+    private final SimulationTime simTime;
     private final AtomicBoolean advancing;
     private final AtomicBoolean regulating;
     private final AtomicBoolean constrained;
 
     public SEEFederateAmbassador() {
-        simulationTime = new Time();
+        simTime = new SimulationTime();
         advancing = new AtomicBoolean(false);
         regulating = new AtomicBoolean(false);
         constrained = new AtomicBoolean(false);
     }
 
+    // Timeline setup will be triggered here since it will be the first time-related callback received by the federate
+    // during the initialization phases.
     @Override
-    public void timeConstrainedEnabled(LogicalTime<?, ?> time) {
-        simulationTime.setFederateLogicalTime(time);
+    public final void timeConstrainedEnabled(LogicalTime<?, ?> time) {
+        HLAinteger64Time convertedTime = (HLAinteger64Time) time;
+        simTime.setSimulationScenarioTimeEpoch(convertedTime.getValue());
+
+        // simulationTime.setFederateLogicalTime(time);
         setConstrained(true);
     }
 
     @Override
-    public void timeRegulationEnabled(LogicalTime<?, ?> time) {
-        simulationTime.setFederateLogicalTime(time);
+    public final void timeRegulationEnabled(LogicalTime<?, ?> time) {
+        HLAinteger64Time convertedTime = (HLAinteger64Time) time;
+        simTime.setLogicalTime(convertedTime);
+
+        // simulationTime.setFederateLogicalTime(time);
         setRegulating(true);
     }
 
     @Override
-    public void timeAdvanceGrant(LogicalTime<?, ?> time) {
+    public final void timeAdvanceGrant(LogicalTime<?, ?> time) {
         HLAinteger64Time convertedTime = (HLAinteger64Time) time;
+        // System.out.println(convertedTime.compareTo(simulationTime.getLogicalTime()));
+        if (convertedTime.compareTo(simTime.getLogicalTime()) >= 0) {
+            System.out.println("TAG INBOUND");
+            simTime.setLogicalTime(convertedTime);
+            advancing.set(false);
+            // System.out.println("ADVANCING: " + advancing.get());
+        }
+        // TODO: Else attempt a re-advance?
+        // Complications here would include the passage of the requested time step in the short moment where we attempt
+        // the re-advance.
+
+        /*
         if (convertedTime.compareTo(simulationTime.getFederationLogicalTime()) >= 0) {
             simulationTime.setFederateLogicalTime(convertedTime);
             advancing.set(false);
         }
+         */
     }
 
     @Override
-    public void announceSynchronizationPoint(String synchronizationPointLabel, byte[] userSuppliedTag) throws FederateInternalError {
+    public final void announceSynchronizationPoint(String synchronizationPointLabel, byte[] userSuppliedTag) throws FederateInternalError {
         SyncPoint syncPoint = SyncPoint.query(synchronizationPointLabel);
 
         if (syncPoint != null) {
@@ -92,7 +111,7 @@ public class SEEFederateAmbassador extends SKFederateAmbassador {
     }
 
     @Override
-    public void federationSynchronized(String synchronizationPointLabel, FederateHandleSet failedToSyncSet) throws FederateInternalError {
+    public final void federationSynchronized(String synchronizationPointLabel, FederateHandleSet failedToSyncSet) throws FederateInternalError {
         SyncPoint syncPoint = SyncPoint.query(synchronizationPointLabel);
 
         if (syncPoint != null) {
@@ -104,7 +123,7 @@ public class SEEFederateAmbassador extends SKFederateAmbassador {
     }
 
     @Override
-    public void synchronizationPointRegistrationSucceeded(String synchronizationPointLabel) throws FederateInternalError {
+    public final void synchronizationPointRegistrationSucceeded(String synchronizationPointLabel) throws FederateInternalError {
         SyncPoint syncPoint = SyncPoint.query(synchronizationPointLabel);
 
         if (syncPoint != null) {
@@ -116,7 +135,7 @@ public class SEEFederateAmbassador extends SKFederateAmbassador {
     }
 
     @Override
-    public void synchronizationPointRegistrationFailed(String synchronizationPointLabel, SynchronizationPointFailureReason reason) throws FederateInternalError {
+    public final void synchronizationPointRegistrationFailed(String synchronizationPointLabel, SynchronizationPointFailureReason reason) throws FederateInternalError {
         SyncPoint syncPoint = SyncPoint.query(synchronizationPointLabel);
 
         if (syncPoint != null) {
@@ -151,7 +170,7 @@ public class SEEFederateAmbassador extends SKFederateAmbassador {
         constrained.set(flag);
     }
 
-    public Time getSimulationTime() {
-        return simulationTime;
+    public SimulationTime getSimTime() {
+        return simTime;
     }
 }

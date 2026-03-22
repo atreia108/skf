@@ -24,7 +24,7 @@
  If not, see http://http://www.gnu.org/licenses/
  *****************************************************************/
 
-package org.see.skf.util.models;
+package org.see.skf.core;
 
 import org.see.skf.annotations.InteractionClass;
 import org.see.skf.annotations.Parameter;

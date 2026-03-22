@@ -47,3 +47,6 @@ __MACOSX/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# IntelliJ IDEA
+target/

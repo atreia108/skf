@@ -330,7 +330,7 @@ public class SKFederateAmbassador extends NullFederateAmbassador {
         }
     }
 
-    public final void sendUpdatedAttributeValues(String entityName, ObjectInstanceHandle instanceHandle, AttributeHandleValueMap attributeValues) {
+    private void sendUpdatedAttributeValues(String entityName, ObjectInstanceHandle instanceHandle, AttributeHandleValueMap attributeValues) {
         try {
             RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
             rtiAmbassador.updateAttributeValues(instanceHandle, attributeValues, null);
@@ -340,7 +340,7 @@ public class SKFederateAmbassador extends NullFederateAmbassador {
         }
     }
 
-    public final void reflectAttributes(ObjectInstanceHandle objectInstance, AttributeHandleValueMap attributeValues) {
+    private void reflectAttributes(ObjectInstanceHandle objectInstance, AttributeHandleValueMap attributeValues) {
         Predicate<ObjectClassEntity> searchPredicate = e -> e.getHandle().equals(objectInstance);
         ObjectClassEntity entity = queryEntities(searchPredicate);
 
@@ -384,7 +384,7 @@ public class SKFederateAmbassador extends NullFederateAmbassador {
         }
     }
 
-    public final boolean sendInteraction(Object interactionClassElement) throws FederateNotExecutionMember, InteractionParameterNotDefined, RestoreInProgress, InteractionClassNotDefined, InteractionClassNotPublished, NotConnected, RTIinternalError, SaveInProgress {
+    final boolean sendInteraction(Object interactionClassElement) throws FederateNotExecutionMember, InteractionParameterNotDefined, RestoreInProgress, InteractionClassNotDefined, InteractionClassNotPublished, NotConnected, RTIinternalError, SaveInProgress {
         Class<?> interactionClass = interactionClassElement.getClass();
         String className = interactionClass.getAnnotation(InteractionClass.class).name();
         Predicate<InteractionClassModel> searchPredicate = c -> c.getName().equals(className);
@@ -405,7 +405,7 @@ public class SKFederateAmbassador extends NullFederateAmbassador {
         }
     }
 
-    public final void receiveInteraction(InteractionClassHandle interactionClass, ParameterHandleValueMap parameterValues) {
+    final void receiveInteraction(InteractionClassHandle interactionClass, ParameterHandleValueMap parameterValues) {
         Predicate<InteractionClassModel> predicate = i -> i.getHandle().equals(interactionClass);
         InteractionClassModel model = queryInteractionClassModels(predicate);
 
@@ -426,19 +426,19 @@ public class SKFederateAmbassador extends NullFederateAmbassador {
         }
     }
 
-    public final void addRemoteObjectInstanceListener(RemoteObjectInstanceListener listener) {
+    final void addRemoteObjectInstanceListener(RemoteObjectInstanceListener listener) {
         instanceListeners.add(listener);
     }
 
-    public final void removeRemoteObjectInstanceListener(RemoteObjectInstanceListener listener) {
+    final void removeRemoteObjectInstanceListener(RemoteObjectInstanceListener listener) {
         instanceListeners.remove(listener);
     }
 
-    public final void addInteractionListener(InteractionListener listener) {
+    final void addInteractionListener(InteractionListener listener) {
         interactionListeners.add(listener);
     }
 
-    public final void removeInteractionListener(InteractionListener listener) {
+    final void removeInteractionListener(InteractionListener listener) {
         interactionListeners.remove(listener);
     }
 

@@ -53,12 +53,14 @@ import java.util.function.Predicate;
 public abstract class SKBaseFederate implements SKFederateInterface {
     private static final Logger logger = LoggerFactory.getLogger(SKBaseFederate.class);
 
-    private final SKFederateAmbassador federateAmbassador;
-    private final FederateConfiguration config;
+    protected final SKFederateAmbassador federateAmbassador;
+    protected final RTIambassador rtiAmbassador;
+    protected final FederateConfiguration config;
 
     protected SKBaseFederate(SKFederateAmbassador federateAmbassador, FederateConfiguration config) {
         this.federateAmbassador = federateAmbassador;
         this.config = config;
+        rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
     }
 
     public abstract void configureAndStart();
@@ -66,8 +68,6 @@ public abstract class SKBaseFederate implements SKFederateInterface {
     @Override
     public final void connectToRTI(RtiConfiguration rtiConfig) throws CallNotAllowedFromWithinCallback, Unauthorized, RTIinternalError, ConnectionFailed, UnsupportedCallbackModel {
         try {
-            RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
-
             rtiAmbassador.connect(federateAmbassador, CallbackModel.HLA_IMMEDIATE, rtiConfig);
             String rtiAddress = rtiConfig.rtiAddress();
             logger.debug("Successfully established connection to the RTI hosted at <{}>.", (rtiAddress != null ? rtiAddress : "Unknown"));
@@ -84,7 +84,6 @@ public abstract class SKBaseFederate implements SKFederateInterface {
         String federateNameSuffix = "";
         int attempt = 1;
 
-        RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
         while (!joined) {
             try {
                 if (additionalFomModules.length > 0) {
@@ -102,16 +101,20 @@ public abstract class SKBaseFederate implements SKFederateInterface {
             }
         }
 
-        if (config.asynchronousDelivery()) {
+        enforceAsynchronousDelivery();
+    }
+
+    private void enforceAsynchronousDelivery() throws FederateNotExecutionMember, RestoreInProgress, AsynchronousDeliveryAlreadyEnabled, NotConnected, RTIinternalError, SaveInProgress {
+        // In line with the SpaceFOM standard, asynchronous delivery is disallowed for late joiners.
+        // Early and late joiners require it for multiphase initialization.
+        if (config.asynchronousDelivery() && !config.federateRole().equalsIgnoreCase("late")) {
             rtiAmbassador.enableAsynchronousDelivery();
-            logger.debug("Asynchronous delivery has been enabled for this federate.");
+            logger.debug("Asynchronous delivery of messages has been enabled for this federate.");
         }
     }
 
     @Override
     public final void resignFederationExecution() throws FederateNotExecutionMember, RestoreInProgress, NotConnected, RTIinternalError, SaveInProgress, CallNotAllowedFromWithinCallback, InvalidResignAction, OwnershipAcquisitionPending, FederateOwnsAttributes, FederateIsExecutionMember {
-        RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
-
         if (config.timeConstrained()) {
             try {
                 rtiAmbassador.disableTimeConstrained();
@@ -143,7 +146,6 @@ public abstract class SKBaseFederate implements SKFederateInterface {
         String federationName = config.federationName();
         logger.info("The federate has resigned from the federation execution <{}>.", federationName);
         rtiAmbassador.disconnect();
-        logger.debug("The RTI ambassador has been disconnected from its RTI.");
     }
 
     private void verifyAnnotationExists(Class<?> targetClass, Class<? extends Annotation> annotationClass) {
@@ -362,13 +364,5 @@ public abstract class SKBaseFederate implements SKFederateInterface {
     @Override
     public final void removeInteractionListener(InteractionListener listener) {
         federateAmbassador.removeInteractionListener(listener);
-    }
-
-    public final FederateConfiguration getConfiguration() {
-        return config;
-    }
-
-    public SKFederateAmbassador getFederateAmbassador() {
-        return federateAmbassador;
     }
 }

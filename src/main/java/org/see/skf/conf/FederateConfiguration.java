@@ -103,7 +103,18 @@ public interface FederateConfiguration {
     class Factory {
         private Factory() {}
 
+        /**
+         * Parses the simulation configuration from a property file. DEPRECATED since 2.1, use the parse() method instead.
+         * @deprecated
+         * @param confFile
+         * @return
+         */
+        @Deprecated
         public static PropertyFileConfiguration create(File confFile) {
+            return new PropertyFileConfiguration(confFile);
+        }
+
+        public static PropertyFileConfiguration parse(File confFile) {
             return new PropertyFileConfiguration(confFile);
         }
     }

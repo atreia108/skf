@@ -1,7 +1,7 @@
 package org.see.skf.runtime;
 
 import org.junit.jupiter.api.Test;
-import org.see.skf.util.models.ModeTransitionRequest;
+import org.see.skf.core.ModeTransitionRequest;
 import org.see.skf.runtime.interactions.InteractionClassModelParser;
 
 import java.lang.reflect.Field;

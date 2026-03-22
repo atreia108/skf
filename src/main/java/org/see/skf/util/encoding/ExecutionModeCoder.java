@@ -30,7 +30,7 @@ import hla.rti1516_2025.encoding.DecoderException;
 import hla.rti1516_2025.encoding.EncoderFactory;
 import hla.rti1516_2025.encoding.HLAinteger16LE;
 import org.see.skf.core.Coder;
-import org.see.skf.util.models.ExecutionConfiguration;
+import org.see.skf.core.ExecutionConfiguration;
 import org.see.skf.core.HLAUtilityFactory;
 
 /**

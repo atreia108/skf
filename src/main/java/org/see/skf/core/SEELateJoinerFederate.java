@@ -29,9 +29,6 @@ package org.see.skf.core;
 import hla.rti1516_2025.RtiConfiguration;
 import hla.rti1516_2025.exceptions.*;
 import org.see.skf.conf.FederateConfiguration;
-import org.see.skf.util.listeners.ExecutionConfigurationListener;
-import org.see.skf.util.models.ExecutionConfiguration;
-import org.see.skf.util.models.ModeTransitionRequest;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -51,9 +48,9 @@ public abstract class SEELateJoinerFederate extends SEEAbstractFederate {
      * with the rest of the federation execution.
      */
     @Override
-    public void configureAndStart() {
+    public final void configureAndStart() {
         try {
-            RtiConfiguration rtiConfig = RtiConfiguration.createConfiguration().withRtiAddress(getConfiguration().rtiAddress());
+            RtiConfiguration rtiConfig = RtiConfiguration.createConfiguration().withRtiAddress(config.rtiAddress());
             connectToRTI(rtiConfig);
             joinFederationExecution();
 
@@ -69,11 +66,10 @@ public abstract class SEELateJoinerFederate extends SEEAbstractFederate {
 
             declareClasses();
             declareObjectInstances();
-
             setupTimeManagement();
             startExecution();
         } catch (RTIexception e) {
-            throw new IllegalStateException("Failed to configure and initialize the federate <" + getConfiguration().federationName() + ">.", e);
+            throw new IllegalStateException("Failed to configure and initialize the federate <" + config.federationName() + ">.", e);
         }
     }
 

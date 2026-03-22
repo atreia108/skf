@@ -26,15 +26,11 @@
 
 package org.see.skf.core;
 
-import hla.rti1516_2025.RTIambassador;
 import hla.rti1516_2025.TimeQueryReturn;
 import hla.rti1516_2025.exceptions.*;
 import hla.rti1516_2025.time.HLAinteger64Time;
-import hla.rti1516_2025.time.HLAinteger64TimeFactory;
 import org.see.skf.conf.FederateConfiguration;
 import org.see.skf.exceptions.DeadlineReachedException;
-import org.see.skf.time.Time;
-import org.see.skf.util.models.ExecutionConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,16 +45,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class SEEAbstractFederate extends SKBaseFederate {
     private static final Logger logger = LoggerFactory.getLogger(SEEAbstractFederate.class);
-    private static long threadWaitInterval = 10L;
+    protected static final long THREAD_WAIT_INTERVAL = 10L;
 
     private final SEEFederateAmbassador federateAmbassador;
+    private final SimulationTime simTime;
     private final ExecutiveState state;
     private final Process process;
 
     protected SEEAbstractFederate(SEEFederateAmbassador federateAmbassador, FederateConfiguration config) {
         super(federateAmbassador, config);
-
         this.federateAmbassador = federateAmbassador;
+
+        // At this point, it should be safe for us to set up the simulation time.
+        simTime = federateAmbassador.getSimTime();
+        long lookAhead = config.lookAhead();
+        simTime.setLookAheadInterval(lookAhead);
+
         process = new Process();
         state = new ExecutiveState();
     }
@@ -66,28 +68,28 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
     /**
      * Begin executing the simulation.
      */
-    public void startExecution() {
+    public final void startExecution() {
         state.gotoRun(false);
     }
 
     /**
      * Enter the SpaceFOM freeze executive control state and pause all simulation activity indefinitely.
      */
-    public void freezeExecution() {
+    public final void freezeExecution() {
         state.gotoFreeze();
     }
 
     /**
      * Leave the SpaceFOM freeze executive control state and resume simulation activity.
      */
-    public void resumeExecution() {
+    public final void resumeExecution() {
         state.gotoRun(true);
     }
 
     /**
      * Disconnect from the federation execution and terminate the simulation.
      */
-    public void shutdownExecution() {
+    public final void shutdownExecution() {
         state.gotoShutdown();
     }
 
@@ -95,16 +97,13 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
      * This method should only be called post ExCO-discovery or there is a risk of inducing a time regulation failure
      * due to missing look ahead interval value.
      */
-    public void setupTimeManagement() {
-        Time simulationTime = federateAmbassador.getSimulationTime();
-        FederateConfiguration config = getConfiguration();
-        Long lookAhead = config.lookAhead();
-
-        simulationTime.setLookAhead(lookAhead);
-
+    public final void setupTimeManagement() {
         try {
-            configureTimePolicy();
-            if (getConfiguration().federateRole().equalsIgnoreCase("late")) {
+            simTime.setupTimeFactory();
+            enforceTimeConstraint();
+            enforceTimeRegulation();
+
+            if (config.federateRole().equalsIgnoreCase("late")) {
                 advanceToHLTB();
             }
         } catch (RTIexception e) {
@@ -112,54 +111,54 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
         }
     }
 
-    private void configureTimePolicy() throws RTIexception {
-        RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
-        FederateConfiguration config = getConfiguration();
-
+    private void enforceTimeConstraint() throws RTIexception{
         if (config.timeConstrained()) {
             rtiAmbassador.enableTimeConstrained();
             while (!federateAmbassador.isConstrained()) {
                 try {
-                    Thread.sleep(threadWaitInterval);
+                    Thread.sleep(THREAD_WAIT_INTERVAL);
                 } catch (InterruptedException e) {
                     logger.warn("Program thread was interrupted while waiting for the RTI to time constrain this federate.");
                     Thread.currentThread().interrupt();
                 }
             }
-            logger.debug("The RTI is now time constraining this federate.");
+            logger.debug("The federate has been time constrained successfully. TSO messages can now be received.");
         }
+    }
 
+    private void enforceTimeRegulation() throws RTIexception {
         if (config.timeRegulating()) {
-            Time simulationTime = federateAmbassador.getSimulationTime();
-            rtiAmbassador.enableTimeRegulation(simulationTime.getLookAheadAsLogicalTime());
+            rtiAmbassador.enableTimeRegulation(simTime.getLookAheadInterval());
             while (!federateAmbassador.isRegulating()) {
                 try {
-                    Thread.sleep(threadWaitInterval);
+                    Thread.sleep(THREAD_WAIT_INTERVAL);
                 } catch (InterruptedException e) {
                     logger.warn("Program thread was interrupted while waiting for the RTI to enable time regulation for this federate.");
                     Thread.currentThread().interrupt();
                 }
             }
-            logger.debug("The RTI is now time regulating this federate.");
-        }
-
-        // In line with the SpaceFOM standard, asynchronous delivery is disallowed for late joiners.
-        if (config.asynchronousDelivery() && !config.federateRole().equalsIgnoreCase("late")) {
-            rtiAmbassador.enableAsynchronousDelivery();
-            logger.debug("Asynchronous delivery of messages has been enabled for this federate.");
+            logger.debug("The federate has been time regulated successfully. TSO messages can now be sent.");
         }
     }
 
     /**
      * Advances the federate to the HLA logical time boundary (HLTB).
+     * @throws FederateNotExecutionMember
+     * @throws RestoreInProgress
+     * @throws NotConnected
+     * @throws RTIinternalError
+     * @throws SaveInProgress
+     * @throws InTimeAdvancingState
+     * @throws RequestForTimeConstrainedPending
+     * @throws LogicalTimeAlreadyPassed
+     * @throws InvalidLogicalTime
+     * @throws RequestForTimeRegulationPending
      */
-    public final void advanceToHLTB() throws RTIexception {
-        RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
-        HLAinteger64TimeFactory timeFactory = HLAUtilityFactory.INSTANCE.getTimeFactory();
+    private void advanceToHLTB() throws FederateNotExecutionMember, RestoreInProgress, NotConnected, RTIinternalError, SaveInProgress, InTimeAdvancingState, RequestForTimeConstrainedPending, LogicalTimeAlreadyPassed, InvalidLogicalTime, RequestForTimeRegulationPending {
         ExecutionConfiguration executionConfiguration = (ExecutionConfiguration) queryRemoteObjectInstance("ExCO");
 
         if (executionConfiguration == null) {
-            logger.error("Failed to advance to the HLA logical time boundary because the ExCO object instance was not found.");
+            logger.error("Failed to compute the HLA logical time boundary (HLTB) because the ExCO object instance has not been discovered yet.");
             return;
         }
 
@@ -167,23 +166,26 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
         if (galtQuery.timeIsValid) {
             HLAinteger64Time galt = (HLAinteger64Time) galtQuery.time;
             long lcts = executionConfiguration.getLeastCommonTimeStep();
-            long hltbValue = ((galt.getValue() / lcts) + 1) * 1000000;
-            HLAinteger64Time hltb = timeFactory.makeTime(hltbValue);
+            long hltb = ((galt.getValue() / lcts) + 1) * 1000000;
+            simTime.setLogicalTimeBoundary(hltb);
+            advanceTime(simTime.getLogicalTimeBoundary());
 
-            Time simulationTime = federateAmbassador.getSimulationTime();
-            simulationTime.setFederationLogicalTime(hltb);
-            advanceTime(hltb);
+            // HLAinteger64Time hltb = timeFactory.makeTime(hltbValue);
+            // SimTime simulationTime = federateAmbassador.getSimulationTime();
+            // simulationTime.setFederationLogicalTime(hltb);
+            // advanceTime(hltb);
         } else {
-            throw new RTIexception("Failed to advance time because the RTI returned an invalid Greatest Available Logical Time (GALT) value.");
+            logger.error("Failed to compute HLA Logical Time Boundary (HLTB) because an invalid Greatest Available Logical Time (GALT) value was returned by the RTI.");
+            // Terminate the simulation rather than allow it to operate with inaccurate clock time.
+            System.exit(1);
         }
     }
 
     /**
      * Advances the federate from its current time step to the HLA logical time provided.
-     * @param timeStep The HLA logical time the federate should advance to.
+     * @param timeStep The HLA logical time that the federate should advance to.
      */
-    public final void advanceTime(HLAinteger64Time timeStep) throws InTimeAdvancingState, FederateNotExecutionMember, RestoreInProgress, RequestForTimeConstrainedPending, NotConnected, LogicalTimeAlreadyPassed, InvalidLogicalTime, RTIinternalError, SaveInProgress, RequestForTimeRegulationPending {
-        RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
+    private void advanceTime(HLAinteger64Time timeStep) throws InTimeAdvancingState, FederateNotExecutionMember, RestoreInProgress, RequestForTimeConstrainedPending, NotConnected, LogicalTimeAlreadyPassed, InvalidLogicalTime, RTIinternalError, SaveInProgress, RequestForTimeRegulationPending {
         rtiAmbassador.timeAdvanceRequest(timeStep);
         federateAmbassador.setAdvancing(true);
     }
@@ -198,10 +200,8 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
      *
      * @param syncPoint A supported synchronization point in the SpaceFOM standard.
      */
-    public void registerSyncPoint(SyncPoint syncPoint) throws FederateNotExecutionMember, RestoreInProgress, NotConnected, RTIinternalError, SaveInProgress {
-        RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
+    public final void registerSyncPoint(SyncPoint syncPoint) throws FederateNotExecutionMember, RestoreInProgress, NotConnected, RTIinternalError, SaveInProgress {
         String syncPointLabel = syncPoint.getLabel();
-
         rtiAmbassador.registerFederationSynchronizationPoint(syncPointLabel, null);
     }
 
@@ -211,10 +211,8 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
      * @param syncPoint A supported synchronization point in the SpaceFOM standard.
      * @param flag true or false depending on if the synchronization point was achieved or not.
      */
-    public void achieveSyncPoint(SyncPoint syncPoint, boolean flag) throws SynchronizationPointLabelNotAnnounced, FederateNotExecutionMember, RestoreInProgress, NotConnected, RTIinternalError, SaveInProgress {
-        RTIambassador rtiAmbassador = HLAUtilityFactory.INSTANCE.getRtiAmbassador();
+    public final void achieveSyncPoint(SyncPoint syncPoint, boolean flag) throws SynchronizationPointLabelNotAnnounced, FederateNotExecutionMember, RestoreInProgress, NotConnected, RTIinternalError, SaveInProgress {
         String syncPointLabel = syncPoint.getLabel();
-
         rtiAmbassador.synchronizationPointAchieved(syncPointLabel, flag);
     }
 
@@ -224,12 +222,12 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
      * @param maxWaitingTime The anticipated time period to wait for the sync point to be announced.
      * @return true or false depending on whether the synchronization point announcement was successful or not.
      */
-    public boolean awaitSyncPointAnnouncement(SyncPoint syncPoint, int maxWaitingTime) {
+    public final boolean awaitSyncPointAnnouncement(SyncPoint syncPoint, int maxWaitingTime) {
         long deadline = System.currentTimeMillis() + maxWaitingTime;
 
         while (!syncPoint.isAnnounced()) {
             try {
-                Thread.sleep(threadWaitInterval);
+                Thread.sleep(THREAD_WAIT_INTERVAL);
                 if (System.currentTimeMillis() >= deadline) {
                     throw new DeadlineReachedException("The synchronization point <" + syncPoint.getLabel() + "> was not announced within the specified waiting period.");
                 }
@@ -250,12 +248,12 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
      * @param maxWaitingTime The anticipated time period to wait for the sync point to be achieved.
      * @return true or false depending on whether the federation was successfully synchronized or not.
      */
-    public boolean awaitFederationSynchronization(SyncPoint syncPoint, int maxWaitingTime) {
+    public final boolean awaitFederationSynchronization(SyncPoint syncPoint, int maxWaitingTime) {
         long deadline = System.currentTimeMillis() + maxWaitingTime;
 
         while (!syncPoint.isFederationSynchronized()) {
             try {
-                Thread.sleep(threadWaitInterval);
+                Thread.sleep(THREAD_WAIT_INTERVAL);
                 if (System.currentTimeMillis() >= deadline) {
                     throw new DeadlineReachedException("Failed to achieve the synchronization point <" + syncPoint.getLabel() + "> within the specified waiting period.");
                 }
@@ -270,38 +268,19 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
         return true;
     }
 
-    public Time getSimulationTime() {
-        return federateAmbassador.getSimulationTime();
-    }
-
-    public static long getThreadWaitInterval() {
-        return threadWaitInterval;
-    }
-
-    public static void setThreadWaitInterval(long interval) {
-        threadWaitInterval = interval;
-    }
-
-    @Override
-    public SEEFederateAmbassador getFederateAmbassador() {
-        return federateAmbassador;
+    SimulationTime getSimTime() {
+        return simTime;
     }
 
     private final class Process implements Runnable {
-        private static final long MICROSECONDS_PER_CYCLE = 1000000L;
-
-        private final SEEFederateAmbassador federateAmbassador;
-        private final Time simulationTime;
+        // private static final long MICROSECONDS_PER_CYCLE = 1000000L;
 
         private final AtomicBoolean running;
         private final AtomicBoolean suspended;
 
-        private long executionCounter;
+        // private long executionCounter;
 
         public Process() {
-            this.federateAmbassador = getFederateAmbassador();
-            this.simulationTime = getSimulationTime();
-
             running = new AtomicBoolean(true);
             suspended = new AtomicBoolean(false);
         }
@@ -309,7 +288,7 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
         @Override
         public void run() {
             while (isRunning()) {
-                simulationTime.setTimeCyclesExecuted(executionCounter * MICROSECONDS_PER_CYCLE);
+                // simulationTime.setTimeCyclesExecuted(executionCounter * MICROSECONDS_PER_CYCLE);
 
                 waitForTimeAdvanceGrant();
                 update();
@@ -319,23 +298,27 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
                         try {
                             wait();
                         } catch (InterruptedException e) {
-                            logger.warn("Program thread was interrupted in suspended state waiting for the federation execution to resume activities.");
+                            logger.warn("Program thread was interrupted in suspended state while waiting for the federation execution to resume activities.");
                             Thread.currentThread().interrupt();
                         }
                     }
                 }
 
                 try {
-                    // There is a possibility that we've got the go-ahead to shut down on an event listener thread, in
-                    // which case attempting to advance time could be catastrophic. This check allows a graceful exit.
+                    // There is a possibility that we have instructions from the RTI to shut down on an event listener
+                    // thread, in which case attempting to advance time could be catastrophic.
+                    // This check permits a graceful exit.
                     if (isRunning()) {
-                        advanceTime(simulationTime.nextTimeStep());
+                        // advanceTime(simulationTime.nextTimeStep());
+                        simTime.increment();
+                        HLAinteger64Time nextLogicalTime = simTime.getLogicalTime();
+                        advanceTime(nextLogicalTime);
                     }
                 } catch (RTIexception e) {
-                    throw new IllegalStateException("The federate encountered an unexpected error when trying to advance to the next time step.", e);
+                    throw new IllegalStateException("The federate encountered an unexpected error while trying to advance to the next time step.", e);
                 }
 
-                ++executionCounter;
+                // ++executionCounter;
             }
 
             try {
@@ -345,10 +328,10 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
             }
         }
 
-        public void waitForTimeAdvanceGrant() {
+        void waitForTimeAdvanceGrant() {
             while (federateAmbassador.isAdvancing() && isRunning()) {
                 try {
-                    Thread.sleep(threadWaitInterval);
+                    Thread.sleep(THREAD_WAIT_INTERVAL);
                 } catch (InterruptedException e) {
                     logger.warn("Program thread was interrupted while waiting for time advance grant from the RTI.");
                     Thread.currentThread().interrupt();
@@ -356,30 +339,30 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
             }
         }
 
-        public void suspend() {
+        void suspend() {
             suspended.set(true);
         }
 
-        public synchronized void resume() {
+        synchronized void resume() {
             suspended.set(false);
             notifyAll();
         }
 
-        public void shutdown() {
+        void shutdown() {
             running.set(false);
         }
 
-        public boolean isRunning() {
+        boolean isRunning() {
             return running.get();
         }
 
-        public boolean isSuspended() {
+        boolean isSuspended() {
             return suspended.get();
         }
     }
 
     private final class ExecutiveState {
-        public void gotoRun(boolean resumeFlag) {
+        void gotoRun(boolean resumeFlag) {
             new Thread(() -> {
                 if (resumeFlag) {
                     process.resume();
@@ -389,11 +372,11 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
             }).start();
         }
 
-        public void gotoFreeze() {
+        void gotoFreeze() {
             // TODO - Implement federate freeze sequence.
         }
 
-        public void gotoShutdown() {
+        void gotoShutdown() {
             process.shutdown();
         }
     }

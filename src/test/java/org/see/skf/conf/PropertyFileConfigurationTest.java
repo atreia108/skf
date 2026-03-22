@@ -7,8 +7,8 @@ import java.io.File;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PropertyFileConfigurationTest {
-    final FederateConfiguration conf1 = FederateConfiguration.Factory.create(new File("src/test/resources/test.conf"));
-    final FederateConfiguration conf2 = FederateConfiguration.Factory.create(new File("src/test/resources/test2.conf"));
+    final FederateConfiguration conf1 = FederateConfiguration.Factory.parse(new File("src/test/resources/test.conf"));
+    final FederateConfiguration conf2 = FederateConfiguration.Factory.parse(new File("src/test/resources/test2.conf"));
 
     @Test
     void testConf1() {

@@ -24,11 +24,7 @@
  If not, see http://http://www.gnu.org/licenses/
  *****************************************************************/
 
-package org.see.skf.util.listeners;
-
-import org.see.skf.core.RemoteObjectInstanceListener;
-import org.see.skf.core.SEEAbstractFederate;
-import org.see.skf.util.models.ExecutionConfiguration;
+package org.see.skf.core;
 
 import java.beans.PropertyChangeListener;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -51,7 +47,12 @@ public class ExecutionConfigurationListener implements RemoteObjectInstanceListe
         ExecutionConfiguration exCO = (ExecutionConfiguration) federate.queryRemoteObjectInstance("ExCO");
 
         if (name.equals("ExCO") && exCO != null) {
-            // This property listener will watch for execution mode changes and instruct the federate accordingly.
+            // Copy the value scenario_time_epoch of ExCO to the federate's sim time field so it can run calculations
+            // later.
+            SimulationTime simTime = federate.getSimTime();
+            simTime.setFederationScenarioTimeEpoch(exCO.getScenarioTimeEpoch());
+
+            // This property listener will watch for execution mode changes and modify federate execution accordingly.
             PropertyChangeListener executionModeChangeListener = evt -> {
                 if (evt.getSource().equals(exCO)) {
                     ExecutionConfiguration.ExecutionMode currentMode = exCO.getCurrentExecutionMode();
@@ -75,8 +76,8 @@ public class ExecutionConfigurationListener implements RemoteObjectInstanceListe
     @Override
     public void instanceRemoved(String name) {
         if (name.equals("ExCO")) {
-            // Until we determine *how* to receive attribute updates for ExCO prior to shut down, the ExCO instance
-            // being deleted is the only way to determine if the federation has gone into termination mode.
+            // Until it can be determined *how* attribute updates for ExCO can be received prior to shut down, the ExCO
+            // instance being deleted is the only way to know for sure if the federation has gone into termination mode.
             federate.shutdownExecution();
         }
     }

@@ -24,12 +24,11 @@
  If not, see http://http://www.gnu.org/licenses/
  *****************************************************************/
 
-package org.see.skf.util.models;
+package org.see.skf.core;
 
 import org.see.skf.annotations.Attribute;
 import org.see.skf.annotations.ObjectClass;
 import org.see.skf.runtime.ScopeLevel;
-import org.see.skf.core.PropertyChangeSubject;
 import org.see.skf.util.encoding.ExecutionModeCoder;
 import org.see.skf.util.encoding.HLAfloat64LECoder;
 import org.see.skf.util.encoding.HLAinteger64BECoder;
