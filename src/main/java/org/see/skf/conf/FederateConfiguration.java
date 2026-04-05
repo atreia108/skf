@@ -106,14 +106,19 @@ public interface FederateConfiguration {
         /**
          * Parses the simulation configuration from a property file. DEPRECATED since 2.1, use the parse() method instead.
          * @deprecated
-         * @param confFile
-         * @return
+         * @param confFile A file that uses the .properties format.
+         * @return configuration The parameters parsed from the configuration file.
          */
-        @Deprecated
+        @Deprecated(since = "2.1", forRemoval = true)
         public static PropertyFileConfiguration create(File confFile) {
             return new PropertyFileConfiguration(confFile);
         }
 
+        /**
+         * Parses the simulation configuration from a property file.
+         * @param confFile A file that uses the .properties format.
+         * @return configuration The parameters parsed from the configuration file.
+         */
         public static PropertyFileConfiguration parse(File confFile) {
             return new PropertyFileConfiguration(confFile);
         }

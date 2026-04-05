@@ -48,18 +48,20 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
     protected static final long THREAD_WAIT_INTERVAL = 10L;
 
     private final SEEFederateAmbassador federateAmbassador;
-    private final SimulationTime simTime;
+    private final SimulationClock simClock;
     private final ExecutiveState state;
     private final Process process;
+
+    private double simTime;
 
     protected SEEAbstractFederate(SEEFederateAmbassador federateAmbassador, FederateConfiguration config) {
         super(federateAmbassador, config);
         this.federateAmbassador = federateAmbassador;
 
         // At this point, it should be safe for us to set up the simulation time.
-        simTime = federateAmbassador.getSimTime();
+        simClock = federateAmbassador.getSimClock();
         long lookAhead = config.lookAhead();
-        simTime.setLookAheadInterval(lookAhead);
+        simClock.setLookAheadInterval(lookAhead);
 
         process = new Process();
         state = new ExecutiveState();
@@ -93,99 +95,44 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
         state.gotoShutdown();
     }
 
-    /**
-     * This method should only be called post ExCO-discovery or there is a risk of inducing a time regulation failure
-     * due to missing look ahead interval value.
-     */
-    public final void setupTimeManagement() {
-        try {
-            simTime.setupTimeFactory();
-            enforceTimeConstraint();
-            enforceTimeRegulation();
-
-            if (config.federateRole().equalsIgnoreCase("late")) {
-                advanceToHLTB();
+    public final void enforceTimeConstraint() throws RTIexception{
+        rtiAmbassador.enableTimeConstrained();
+        while (!federateAmbassador.isConstrained()) {
+            try {
+                Thread.sleep(THREAD_WAIT_INTERVAL);
+            } catch (InterruptedException e) {
+                logger.warn("Program thread was interrupted while waiting for the RTI to time constrain this federate.");
+                Thread.currentThread().interrupt();
             }
-        } catch (RTIexception e) {
-            throw new IllegalStateException("Unexpected error encountered while trying to configure time regulation and constraints.", e);
         }
+        logger.debug("The federate has been time constrained successfully. TSO messages can now be received.");
     }
 
-    private void enforceTimeConstraint() throws RTIexception{
-        if (config.timeConstrained()) {
-            rtiAmbassador.enableTimeConstrained();
-            while (!federateAmbassador.isConstrained()) {
-                try {
-                    Thread.sleep(THREAD_WAIT_INTERVAL);
-                } catch (InterruptedException e) {
-                    logger.warn("Program thread was interrupted while waiting for the RTI to time constrain this federate.");
-                    Thread.currentThread().interrupt();
-                }
+    public final void enforceTimeRegulation() throws RTIexception {
+        rtiAmbassador.enableTimeRegulation(simClock.getLookAheadInterval());
+        while (!federateAmbassador.isRegulating()) {
+            try {
+                Thread.sleep(THREAD_WAIT_INTERVAL);
+            } catch (InterruptedException e) {
+                logger.warn("Program thread was interrupted while waiting for the RTI to enable time regulation for this federate.");
+                Thread.currentThread().interrupt();
             }
-            logger.debug("The federate has been time constrained successfully. TSO messages can now be received.");
         }
+        logger.debug("The federate has been time regulated successfully. TSO messages can now be sent.");
     }
 
-    private void enforceTimeRegulation() throws RTIexception {
-        if (config.timeRegulating()) {
-            rtiAmbassador.enableTimeRegulation(simTime.getLookAheadInterval());
-            while (!federateAmbassador.isRegulating()) {
-                try {
-                    Thread.sleep(THREAD_WAIT_INTERVAL);
-                } catch (InterruptedException e) {
-                    logger.warn("Program thread was interrupted while waiting for the RTI to enable time regulation for this federate.");
-                    Thread.currentThread().interrupt();
-                }
-            }
-            logger.debug("The federate has been time regulated successfully. TSO messages can now be sent.");
-        }
-    }
-
-    /**
-     * Advances the federate to the HLA logical time boundary (HLTB).
-     * @throws FederateNotExecutionMember
-     * @throws RestoreInProgress
-     * @throws NotConnected
-     * @throws RTIinternalError
-     * @throws SaveInProgress
-     * @throws InTimeAdvancingState
-     * @throws RequestForTimeConstrainedPending
-     * @throws LogicalTimeAlreadyPassed
-     * @throws InvalidLogicalTime
-     * @throws RequestForTimeRegulationPending
-     */
-    private void advanceToHLTB() throws FederateNotExecutionMember, RestoreInProgress, NotConnected, RTIinternalError, SaveInProgress, InTimeAdvancingState, RequestForTimeConstrainedPending, LogicalTimeAlreadyPassed, InvalidLogicalTime, RequestForTimeRegulationPending {
-        ExecutionConfiguration executionConfiguration = (ExecutionConfiguration) queryRemoteObjectInstance("ExCO");
-
-        if (executionConfiguration == null) {
-            logger.error("Failed to compute the HLA logical time boundary (HLTB) because the ExCO object instance has not been discovered yet.");
-            return;
-        }
-
-        TimeQueryReturn galtQuery = rtiAmbassador.queryGALT();
-        if (galtQuery.timeIsValid) {
-            HLAinteger64Time galt = (HLAinteger64Time) galtQuery.time;
-            long lcts = executionConfiguration.getLeastCommonTimeStep();
-            long hltb = ((galt.getValue() / lcts) + 1) * 1000000;
-            simTime.setLogicalTimeBoundary(hltb);
-            advanceTime(simTime.getLogicalTimeBoundary());
-
-            // HLAinteger64Time hltb = timeFactory.makeTime(hltbValue);
-            // SimTime simulationTime = federateAmbassador.getSimulationTime();
-            // simulationTime.setFederationLogicalTime(hltb);
-            // advanceTime(hltb);
-        } else {
-            logger.error("Failed to compute HLA Logical Time Boundary (HLTB) because an invalid Greatest Available Logical Time (GALT) value was returned by the RTI.");
-            // Terminate the simulation rather than allow it to operate with inaccurate clock time.
-            System.exit(1);
-        }
+    public final void enforceAsynchronousDelivery() throws FederateNotExecutionMember, RestoreInProgress, AsynchronousDeliveryAlreadyEnabled, NotConnected, RTIinternalError, SaveInProgress {
+        // In line with the SpaceFOM standard, asynchronous delivery is disallowed for late joiners.
+        // Early and late joiners require it for multiphase initialization.
+        rtiAmbassador.enableAsynchronousDelivery();
+        logger.debug("Asynchronous delivery of messages has been enabled for this federate.");
     }
 
     /**
      * Advances the federate from its current time step to the HLA logical time provided.
      * @param timeStep The HLA logical time that the federate should advance to.
      */
-    private void advanceTime(HLAinteger64Time timeStep) throws InTimeAdvancingState, FederateNotExecutionMember, RestoreInProgress, RequestForTimeConstrainedPending, NotConnected, LogicalTimeAlreadyPassed, InvalidLogicalTime, RTIinternalError, SaveInProgress, RequestForTimeRegulationPending {
+    final void advanceTime(HLAinteger64Time timeStep) throws InTimeAdvancingState, FederateNotExecutionMember, RestoreInProgress, RequestForTimeConstrainedPending, NotConnected, LogicalTimeAlreadyPassed, InvalidLogicalTime, RTIinternalError, SaveInProgress, RequestForTimeRegulationPending {
         rtiAmbassador.timeAdvanceRequest(timeStep);
         federateAmbassador.setAdvancing(true);
     }
@@ -268,7 +215,11 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
         return true;
     }
 
-    SimulationTime getSimTime() {
+    SimulationClock getSimClock() {
+        return simClock;
+    }
+
+    public double getSimTime() {
         return simTime;
     }
 
@@ -310,9 +261,11 @@ public abstract class SEEAbstractFederate extends SKBaseFederate {
                     // This check permits a graceful exit.
                     if (isRunning()) {
                         // advanceTime(simulationTime.nextTimeStep());
-                        simTime.increment();
-                        HLAinteger64Time nextLogicalTime = simTime.getLogicalTime();
+                        simClock.increment();
+                        HLAinteger64Time nextLogicalTime = simClock.getLogicalTime();
                         advanceTime(nextLogicalTime);
+
+                        simTime = simClock.getSimulationScenarioTime();
                     }
                 } catch (RTIexception e) {
                     throw new IllegalStateException("The federate encountered an unexpected error while trying to advance to the next time step.", e);

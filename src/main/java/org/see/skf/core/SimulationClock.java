@@ -31,11 +31,12 @@ import hla.rti1516_2025.time.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * TODO
+ * Global clock for the simulation that maintains a coordinated progression of time
+ * across the physical and HLA timelines.
  *
- * @since 1.5
+ * @since 2.1
  */
-public final class SimulationTime {
+public final class SimulationClock {
     // Given that the SST values are highly unlikely to be used outside of this class AND the absence of a built-in
     // AtomicDouble type in the JDK, primitive double types are used instead.
     private double federationScenarioTimeEpoch;
@@ -48,36 +49,51 @@ public final class SimulationTime {
 
     private HLAinteger64TimeFactory timeFactory;
 
-    public SimulationTime() {
+    public SimulationClock() {
         simulationScenarioTimeEpoch = -1L;
         simulationScenarioTime = -1L;
         logicalTimeBoundary = new AtomicLong(-1L);
         federateLogicalTime = new AtomicLong(-1L);
         federateLookAheadInterval = new AtomicLong(-1L);
-
         simulationElapsedTime = new AtomicLong(0L);
+    }
+
+    void increment() {
+        // Move to the next time step.
+        // Increment SET, SST, and of course HLT.
+        simulationElapsedTime.set(getSimulationElapsedTime() + 1L);
+        simulationScenarioTime += 1.0;
+        federateLogicalTime.getAndAdd(federateLookAheadInterval.get());
     }
 
     void setupTimeFactory() {
         timeFactory = HLAUtilityFactory.INSTANCE.getTimeFactory();
     }
 
-    void setSimulationScenarioTimeEpoch(long epoch) {
+    void setSimulationScenarioTimeEpoch(long logicalTime) {
         if (simulationScenarioTimeEpoch == -1L) {
-            // TODO
             // 1. How many ticks since HLT 0?
-            // 2. Result of (1) + SST_EPOCH
-            // 3. Also set SST to SST_EPOCH
+            // 2. Result of (1) + FST_EPOCH
+            // 3. Finally, set SST = SST_EPOCH
+            simulationScenarioTimeEpoch = ticksSinceEpoch(logicalTime) + federationScenarioTimeEpoch;
+            simulationScenarioTime = simulationScenarioTimeEpoch;
         }
     }
 
-    private long ticksSinceEpoch() {
-
-        return 0L;
+    private long ticksSinceEpoch(long logicalTime) {
+        if ((logicalTime % 1000000) == 0) {
+            return logicalTime / 1000000;
+        } else {
+            return logicalTime;
+        }
     }
 
     void setFederationScenarioTimeEpoch(double value) {
         federationScenarioTimeEpoch = value;
+    }
+
+    double getSimulationScenarioTime() {
+        return simulationScenarioTime;
     }
 
     HLAinteger64Interval getLookAheadInterval() {
@@ -107,60 +123,4 @@ public final class SimulationTime {
     long getSimulationElapsedTime() {
         return simulationElapsedTime.get();
     }
-
-    void increment() {
-        // Move to the next time step.
-        // Increment SET, SST, and of course HLT.
-        simulationElapsedTime.set(getSimulationElapsedTime() + 1L);
-        simulationScenarioTime += 1.0;
-        federateLogicalTime.getAndAdd(federateLookAheadInterval.get());
-    }
-
-    //////////////////////////////////////////////////////////////////////////////////////////////
-
-    /*
-    private HLAinteger64Interval lookAhead;
-    private HLAinteger64Time federationTime;
-    private HLAinteger64Time federateTime;
-
-    private long timeCyclesExecuted;
-
-    public HLAinteger64Time nextTimeStep() throws IllegalTimeArithmetic {
-        federationTime = federationTime.add(lookAhead);
-        return federationTime;
-    }
-
-    public HLAinteger64Time getFederationLogicalTime() {
-        return federationTime;
-    }
-
-    public void setFederationLogicalTime(LogicalTime<?, ?> newTime) {
-        federationTime = (HLAinteger64Time) newTime;
-    }
-
-    public HLAinteger64Time getFederateLogicalTime() {
-        return federateTime;
-    }
-
-    public void setFederateLogicalTime(LogicalTime<?, ?> federateTime) {
-        this.federateTime = (HLAinteger64Time) federateTime;
-    }
-
-    public LogicalTimeInterval<HLAinteger64Interval> getLookAheadAsLogicalTime() {
-        return timeFactory.makeInterval(federateLookAheadInterval.get());
-    }
-
-    public long getLookAhead() {
-        return lookAhead.getValue();
-    }
-
-    public void setLookAhead(long lookAheadInterval) {
-        HLAinteger64TimeFactory timeFactory = HLAUtilityFactory.INSTANCE.getTimeFactory();
-        lookAhead = timeFactory.makeInterval(lookAheadInterval);
-    }
-
-    public void setTimeCyclesExecuted(long value) {
-        timeCyclesExecuted = value;
-    }
-     */
 }

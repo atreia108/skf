@@ -22,17 +22,17 @@
         <dependency>
             <groupId>se.pitch</groupId>
             <artifactId>prti1516-hla4</artifactId>
-            <version>6.1.1</version>
+            <version>6.1.2</version>
         </dependency>
         <dependency>
             <groupId>se.pitch</groupId>
             <artifactId>prticore</artifactId>
-            <version>6.1.1</version>
+            <version>6.1.2</version>
         </dependency>
         <dependency>
             <groupId>se.pitch</groupId>
             <artifactId>booster1516</artifactId>
-            <version>6.1.1</version>
+            <version>6.1.2</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

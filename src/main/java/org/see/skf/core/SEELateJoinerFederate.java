@@ -27,8 +27,12 @@
 package org.see.skf.core;
 
 import hla.rti1516_2025.RtiConfiguration;
+import hla.rti1516_2025.TimeQueryReturn;
 import hla.rti1516_2025.exceptions.*;
+import hla.rti1516_2025.time.HLAinteger64Time;
 import org.see.skf.conf.FederateConfiguration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -39,6 +43,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @since 2.0
  */
 public abstract class SEELateJoinerFederate extends SEEAbstractFederate {
+    private static final Logger logger = LoggerFactory.getLogger(SEELateJoinerFederate.class);
+
     protected SEELateJoinerFederate(SEEFederateAmbassador federateAmbassador, FederateConfiguration federateConfiguration) {
         super(federateAmbassador, federateConfiguration);
     }
@@ -70,6 +76,46 @@ public abstract class SEELateJoinerFederate extends SEEAbstractFederate {
             startExecution();
         } catch (RTIexception e) {
             throw new IllegalStateException("Failed to configure and initialize the federate <" + config.federationName() + ">.", e);
+        }
+    }
+
+    /**
+     * This method should only be called post ExCO-discovery or there is a risk of inducing a time regulation failure
+     * due to missing look ahead interval value.
+     */
+    public final void setupTimeManagement() {
+        try {
+            getSimClock().setupTimeFactory();
+            enforceTimeConstraint();
+            enforceTimeRegulation();
+            advanceToHLTB();
+        } catch (RTIexception e) {
+            throw new IllegalStateException("Unexpected error encountered while trying to configure time regulation and constraints.", e);
+        }
+    }
+
+    /**
+     * Advances the federate to the HLA logical time boundary (HLTB).
+     */
+    private void advanceToHLTB() throws FederateNotExecutionMember, RestoreInProgress, NotConnected, RTIinternalError, SaveInProgress, InTimeAdvancingState, RequestForTimeConstrainedPending, LogicalTimeAlreadyPassed, InvalidLogicalTime, RequestForTimeRegulationPending {
+        ExecutionConfiguration executionConfiguration = (ExecutionConfiguration) queryRemoteObjectInstance("ExCO");
+
+        if (executionConfiguration == null) {
+            logger.error("Failed to compute the HLA logical time boundary (HLTB) because the ExCO object instance has not been discovered yet.");
+            return;
+        }
+
+        TimeQueryReturn galtQuery = rtiAmbassador.queryGALT();
+        if (galtQuery.timeIsValid) {
+            HLAinteger64Time galt = (HLAinteger64Time) galtQuery.time;
+            long lcts = executionConfiguration.getLeastCommonTimeStep();
+            long hltb = ((galt.getValue() / lcts) + 1) * 1000000;
+            getSimClock().setLogicalTimeBoundary(hltb);
+            advanceTime(getSimClock().getLogicalTimeBoundary());
+        } else {
+            logger.error("Failed to compute HLA Logical Time Boundary (HLTB) because an invalid Greatest Available Logical Time (GALT) value was returned by the RTI.");
+            // Terminate the simulation rather than allow it to operate with inaccurate clock time.
+            System.exit(1);
         }
     }
 

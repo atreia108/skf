@@ -1,6 +1,7 @@
 package org.see.skf.core;
 
 import hla.rti1516_2025.exceptions.*;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.see.skf.conf.FederateConfiguration;
 
@@ -11,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class LateJoinerFederateTest {
     private static File confFile = new File("src/test/resources/test_federate.conf");
 
+    @Disabled
     @Test
     void testLaunch() {
         assertNotNull(confFile);

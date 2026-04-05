@@ -100,17 +100,6 @@ public abstract class SKBaseFederate implements SKFederateInterface {
                 break;
             }
         }
-
-        enforceAsynchronousDelivery();
-    }
-
-    private void enforceAsynchronousDelivery() throws FederateNotExecutionMember, RestoreInProgress, AsynchronousDeliveryAlreadyEnabled, NotConnected, RTIinternalError, SaveInProgress {
-        // In line with the SpaceFOM standard, asynchronous delivery is disallowed for late joiners.
-        // Early and late joiners require it for multiphase initialization.
-        if (config.asynchronousDelivery() && !config.federateRole().equalsIgnoreCase("late")) {
-            rtiAmbassador.enableAsynchronousDelivery();
-            logger.debug("Asynchronous delivery of messages has been enabled for this federate.");
-        }
     }
 
     @Override

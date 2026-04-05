@@ -44,58 +44,44 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SEEFederateAmbassador extends SKFederateAmbassador {
     private static final Logger logger = LoggerFactory.getLogger(SEEFederateAmbassador.class);
 
-    private final SimulationTime simTime;
+    private final SimulationClock simClock;
     private final AtomicBoolean advancing;
     private final AtomicBoolean regulating;
     private final AtomicBoolean constrained;
 
     public SEEFederateAmbassador() {
-        simTime = new SimulationTime();
+        simClock = new SimulationClock();
         advancing = new AtomicBoolean(false);
         regulating = new AtomicBoolean(false);
         constrained = new AtomicBoolean(false);
     }
 
-    // Timeline setup will be triggered here since it will be the first time-related callback received by the federate
+    // Timeline setup is triggered here since it will be the first time-related callback received by the federate
     // during the initialization phases.
     @Override
     public final void timeConstrainedEnabled(LogicalTime<?, ?> time) {
         HLAinteger64Time convertedTime = (HLAinteger64Time) time;
-        simTime.setSimulationScenarioTimeEpoch(convertedTime.getValue());
-
-        // simulationTime.setFederateLogicalTime(time);
+        simClock.setSimulationScenarioTimeEpoch(convertedTime.getValue());
         setConstrained(true);
     }
 
     @Override
     public final void timeRegulationEnabled(LogicalTime<?, ?> time) {
         HLAinteger64Time convertedTime = (HLAinteger64Time) time;
-        simTime.setLogicalTime(convertedTime);
-
-        // simulationTime.setFederateLogicalTime(time);
+        simClock.setLogicalTime(convertedTime);
         setRegulating(true);
     }
 
     @Override
     public final void timeAdvanceGrant(LogicalTime<?, ?> time) {
         HLAinteger64Time convertedTime = (HLAinteger64Time) time;
-        // System.out.println(convertedTime.compareTo(simulationTime.getLogicalTime()));
-        if (convertedTime.compareTo(simTime.getLogicalTime()) >= 0) {
-            System.out.println("TAG INBOUND");
-            simTime.setLogicalTime(convertedTime);
+        if (convertedTime.compareTo(simClock.getLogicalTime()) >= 0) {
+            simClock.setLogicalTime(convertedTime);
             advancing.set(false);
-            // System.out.println("ADVANCING: " + advancing.get());
         }
         // TODO: Else attempt a re-advance?
         // Complications here would include the passage of the requested time step in the short moment where we attempt
         // the re-advance.
-
-        /*
-        if (convertedTime.compareTo(simulationTime.getFederationLogicalTime()) >= 0) {
-            simulationTime.setFederateLogicalTime(convertedTime);
-            advancing.set(false);
-        }
-         */
     }
 
     @Override
@@ -170,7 +156,7 @@ public class SEEFederateAmbassador extends SKFederateAmbassador {
         constrained.set(flag);
     }
 
-    public SimulationTime getSimTime() {
-        return simTime;
+    public SimulationClock getSimClock() {
+        return simClock;
     }
 }

@@ -49,8 +49,8 @@ public class ExecutionConfigurationListener implements RemoteObjectInstanceListe
         if (name.equals("ExCO") && exCO != null) {
             // Copy the value scenario_time_epoch of ExCO to the federate's sim time field so it can run calculations
             // later.
-            SimulationTime simTime = federate.getSimTime();
-            simTime.setFederationScenarioTimeEpoch(exCO.getScenarioTimeEpoch());
+            SimulationClock simClock = federate.getSimClock();
+            simClock.setFederationScenarioTimeEpoch(exCO.getScenarioTimeEpoch());
 
             // This property listener will watch for execution mode changes and modify federate execution accordingly.
             PropertyChangeListener executionModeChangeListener = evt -> {
