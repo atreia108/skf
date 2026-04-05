@@ -50,7 +50,7 @@ public final class SimulationClock {
     private HLAinteger64TimeFactory timeFactory;
 
     public SimulationClock() {
-        simulationScenarioTimeEpoch = -1L;
+        simulationScenarioTimeEpoch = -1.0;
         simulationScenarioTime = -1L;
         logicalTimeBoundary = new AtomicLong(-1L);
         federateLogicalTime = new AtomicLong(-1L);
@@ -71,7 +71,7 @@ public final class SimulationClock {
     }
 
     void setSimulationScenarioTimeEpoch(long logicalTime) {
-        if (simulationScenarioTimeEpoch == -1L) {
+        if (simulationScenarioTimeEpoch == -1.0) {
             // 1. How many ticks since HLT 0?
             // 2. Result of (1) + FST_EPOCH
             // 3. Finally, set SST = SST_EPOCH

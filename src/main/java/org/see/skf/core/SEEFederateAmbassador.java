@@ -60,15 +60,17 @@ public class SEEFederateAmbassador extends SKFederateAmbassador {
     // during the initialization phases.
     @Override
     public final void timeConstrainedEnabled(LogicalTime<?, ?> time) {
-        HLAinteger64Time convertedTime = (HLAinteger64Time) time;
-        simClock.setSimulationScenarioTimeEpoch(convertedTime.getValue());
         setConstrained(true);
     }
 
     @Override
     public final void timeRegulationEnabled(LogicalTime<?, ?> time) {
+        // HLAinteger64Time convertedTime = (HLAinteger64Time) time;
+        // simClock.setLogicalTime(convertedTime);
+
         HLAinteger64Time convertedTime = (HLAinteger64Time) time;
-        simClock.setLogicalTime(convertedTime);
+        simClock.setSimulationScenarioTimeEpoch(convertedTime.getValue());
+
         setRegulating(true);
     }
 
